@@ -33,6 +33,18 @@ async function run() {
         const appointmentOptionCollection = client.db('doctors-portal').collection('apointmentOptions');
         const bookingCollection = client.db('doctors-portal').collection('bookings');
         const userCollection = client.db('doctors-portal').collection('users');
+        const doctorCollection = client.db('doctors-portal').collection('doctors');
+
+        const veryifyAdmin = async (req, res, next) => {
+            const decodedEmail = req.decoded.email;
+            const query = { email: decodedEmail };
+            const user = await userCollection.findOne(query);
+
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ message: "Forbidden access" })
+            }
+            next();
+        }
 
         app.get('/appointmentOptions', async (req, res) => {
             const date = req.query.date;
@@ -47,6 +59,12 @@ async function run() {
                 option.slots = remainingSlots;
             })
             res.send(options);
+        })
+
+        app.get('/appointmentSpecialty', async (req, res) => {
+            const query = {};
+            const specialty = await appointmentOptionCollection.find(query).project({ name: 1 }).toArray();
+            res.send(specialty);
         })
 
         app.get('/bookings', verifyJwt, async (req, res) => {
@@ -86,7 +104,7 @@ async function run() {
             res.status(403).send({ accessToken: "" })
         })
 
-        app.get('/users', async (req, res) => {
+        app.get('/users', verifyJwt, veryifyAdmin, async (req, res) => {
             const query = {};
             const result = await userCollection.find(query).toArray();
             res.send(result);
@@ -99,15 +117,7 @@ async function run() {
             res.send({ isAdmin: user?.role === "admin" })
         })
 
-        app.put('/users/admin/:id', verifyJwt, async (req, res) => {
-            const decodedEmail = req.decoded.email;
-            const query = { email: decodedEmail };
-            const user = await userCollection.findOne(query);
-
-            if (user?.role !== 'admin') {
-                return res.status(403).send({ message: "Forbidden access" })
-            }
-
+        app.put('/users/admin/:id', verifyJwt, veryifyAdmin, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: ObjectId(id) };
             const options = { upsert: true };
@@ -120,10 +130,29 @@ async function run() {
             res.send(result)
         })
 
-        app.post('/users', async (req, res) => {
+        app.post('/users', verifyJwt, veryifyAdmin, async (req, res) => {
             const user = req.body;
             const userInfo = await userCollection.insertOne(user);
             res.send(userInfo);
+        })
+
+        app.get('/doctors', verifyJwt, veryifyAdmin, async (req, res) => {
+            const query = {};
+            const doctors = await doctorCollection.find(query).toArray();
+            res.send(doctors);
+        })
+
+        app.post('/doctors', verifyJwt, veryifyAdmin, async (req, res) => {
+            const doctor = req.body;
+            const result = await doctorCollection.insertOne(doctor);
+            res.send(result);
+        })
+
+        app.delete('/doctors/:id', verifyJwt, veryifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: ObjectId(id) };
+            const result = await doctorCollection.deleteOne(filter);
+            res.send(result);
         })
 
     }
